@@ -6,6 +6,7 @@ generates synthetic stock prices.
 
 from __future__ import annotations
 
+import argparse
 from datetime import date
 from importlib import import_module
 from pathlib import Path
@@ -13,6 +14,7 @@ from typing import Iterable
 
 
 REQUIRED_COLUMNS = ["date", "ticker", "close", "low", "high", "volume", "variation"]
+SAMPLE_TICKERS = ["BCP", "CIH", "BOA"]
 
 
 def _load_pandas():
@@ -194,7 +196,7 @@ def collect_stock_data(tickers, start_date=None, end_date=None):
     return result
 
 
-def save_raw_data(df, output_path):
+def save_raw_data(df, output_path="data/raw/raw_prices.csv"):
     """Save raw collected data to a CSV file.
 
     Parameters
@@ -246,4 +248,48 @@ def save_raw_data(df, output_path):
     return path
 
 
+def _parse_args():
+    parser = argparse.ArgumentParser(
+        description="Collect raw BVC stock data with BVCscrap and save it as CSV."
+    )
+    parser.add_argument(
+        "--tickers",
+        nargs="+",
+        default=SAMPLE_TICKERS,
+        help="Ticker names using BVCscrap notation. Defaults to: BCP CIH BOA.",
+    )
+    parser.add_argument(
+        "--start-date",
+        default=None,
+        help="Optional start date in YYYY-MM-DD format.",
+    )
+    parser.add_argument(
+        "--end-date",
+        default=None,
+        help="Optional end date in YYYY-MM-DD format.",
+    )
+    parser.add_argument(
+        "--output",
+        default="data/raw/raw_prices.csv",
+        help="CSV output path. Defaults to data/raw/raw_prices.csv.",
+    )
+    return parser.parse_args()
+
+
+def _main():
+    args = _parse_args()
+    raw_data = collect_stock_data(
+        args.tickers,
+        start_date=args.start_date,
+        end_date=args.end_date,
+    )
+    saved_path = save_raw_data(raw_data, args.output)
+    print(f"Saved {len(raw_data)} raw rows to {saved_path}")
+    print(f"CSV columns: {', '.join(REQUIRED_COLUMNS)}")
+
+
 __all__ = ["collect_stock_data", "save_raw_data"]
+
+
+if __name__ == "__main__":
+    _main()
