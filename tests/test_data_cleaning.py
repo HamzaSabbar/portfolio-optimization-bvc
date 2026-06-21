@@ -64,6 +64,26 @@ def test_clean_prices_rejects_missing_required_columns():
         clean_prices(raw_data)
 
 
+def test_clean_prices_accepts_already_standardized_columns_and_deduplicates_by_date_ticker():
+    raw_data = pd.DataFrame(
+        {
+            "date": ["2024-01-02", "2024-01-02", "2024-01-03"],
+            "ticker": ["BCP", "BCP", "BCP"],
+            "close": ["270", "275", "280"],
+            "low": ["269", "274", "279"],
+            "high": ["271", "276", "281"],
+            "volume": ["100", "200", "300"],
+            "variation": ["0.1", "0.2", "0.3"],
+        }
+    )
+
+    cleaned = clean_prices(raw_data)
+
+    assert cleaned["close"].tolist() == [275, 280]
+    assert cleaned["volume"].tolist() == [200, 300]
+    assert not cleaned.duplicated(subset=["date", "ticker"]).any()
+
+
 def test_save_clean_prices_writes_csv(tmp_path):
     cleaned = pd.DataFrame(
         {

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
 
 
+DEFAULT_OUTPUT_PATH = Path("data") / "processed" / "clean_prices.csv"
 COLUMN_RENAME_MAP = {
     "date": "date",
     "ticker": "ticker",
@@ -20,7 +23,8 @@ COLUMN_RENAME_MAP = {
     "variation": "variation",
 }
 REQUIRED_COLUMNS = ["date", "ticker", "close", "low", "high", "volume", "variation"]
-NUMERIC_COLUMNS = ["close", "low", "high", "volume", "variation"]
+PRICE_VOLUME_COLUMNS = ["close", "low", "high", "volume"]
+NUMERIC_COLUMNS = PRICE_VOLUME_COLUMNS + ["variation"]
 
 
 def _standardize_column_names(df: pd.DataFrame) -> pd.DataFrame:
@@ -82,14 +86,14 @@ def clean_prices(df: pd.DataFrame) -> pd.DataFrame:
         cleaned[column] = pd.to_numeric(cleaned[column], errors="coerce")
 
     cleaned = cleaned.dropna(subset=["date", "ticker", "close"])
-    cleaned = cleaned.drop_duplicates()
     cleaned = cleaned[cleaned["close"] > 0]
+    cleaned = cleaned.drop_duplicates(subset=["date", "ticker"], keep="last")
     cleaned = cleaned.sort_values(["ticker", "date"]).reset_index(drop=True)
 
     return cleaned
 
 
-def save_clean_prices(df: pd.DataFrame, output_path) -> Path:
+def save_clean_prices(df: pd.DataFrame, output_path=DEFAULT_OUTPUT_PATH) -> Path:
     """Save cleaned prices to a CSV file.
 
     Parameters
@@ -127,7 +131,57 @@ def save_clean_prices(df: pd.DataFrame, output_path) -> Path:
     except Exception as exc:
         raise RuntimeError(f"Failed to save cleaned prices to '{path}'.") from exc
 
+    print(f"Saved cleaned prices to: {path}")
+    print(f"Output shape: {df.shape}")
+    print("Rows per ticker:")
+    print(df.groupby("ticker").size().sort_index().to_string())
+
     return path
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Clean raw BVC stock prices and save data/processed/clean_prices.csv."
+    )
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="Input raw CSV path, for example data\\raw\\raw_prices.csv.",
+    )
+    parser.add_argument(
+        "--output",
+        default=str(DEFAULT_OUTPUT_PATH),
+        help="Output cleaned CSV path. Defaults to data\\processed\\clean_prices.csv.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the Phase 2 data cleaning command-line interface."""
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"Data cleaning failed: input file does not exist: {input_path}", file=sys.stderr)
+        return 1
+    if input_path.stat().st_size == 0:
+        print(f"Data cleaning failed: input file is empty: {input_path}", file=sys.stderr)
+        return 1
+
+    try:
+        raw_prices = pd.read_csv(input_path)
+        cleaned_prices = clean_prices(raw_prices)
+        save_clean_prices(cleaned_prices, args.output)
+    except Exception as exc:
+        print(f"Data cleaning failed: {exc}", file=sys.stderr)
+        return 1
+
+    return 0
+
+
 __all__ = ["clean_prices", "save_clean_prices"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

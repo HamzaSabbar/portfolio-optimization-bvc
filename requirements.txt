@@ -8,3 +8,4 @@ matplotlib
 joblib
 pytest
 openpyxl
+BVCscrap
